@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Mini Vegas — Hold’em • Blackjack • Baccarat (Chip Betting + Saved Bankroll)</title>
+<style>
+  :root {
+    --felt: #0a6a29;
+    --felt-dark: #06481b;
+    --table: #0e5b27;
+    --ink: #fff;
+    --accent: #ffd34d;
+    --shadow: rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0; background:
+      radial-gradient(1200px 600px at 80% -20%, #126d32 0%, transparent 60%),
+      radial-gradient(1200px 600px at 10% 120%, #125f2b 0%, transparent 60%),
+      var(--felt);
+    color: var(--ink); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  }
+  header {
+    position: sticky; top:0; z-index:10; backdrop-filter: blur(6px);
+    background: linear-gradient(0deg, #043813e6, #043813f2);
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom: 1px solid #ffffff22;
+    box-shadow: 0 4px 16px var(--shadow);
+  }
+  h1 { margin:0; font-size: 20px; letter-spacing:.3px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  select, button, input { font-size:16px; border:none; border-radius:12px; padding:10px 12px; }
+  select, input { background:#eef8f0; }
+  button { background:#1ea34a; color:#fff; font-weight:700; box-shadow:0 2px 0 #0e6b2c; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:not-allowed; }
+  .pill { background:#0a3f19; padding:8px 12px; border-radius:999px; border:1px solid #ffffff22; }
+  .chips { color: var(--accent); font-weight:800; }
+  .wrap { max-width:1200px; margin:22px auto; padding:18px; }
+  .table {
+    background: radial-gradient(100% 100% at 50% 0%, #0c6a2d 0%, #095825 60%, #06481b 100%);
+    border: 6px solid #fefefe; border-radius: 18px; padding:18px; box-shadow:0 10px 40px var(--shadow);
+    margin-bottom: 18px;
+  }
+  h2 { margin:10px 0 10px; font-size:22px; }
+  h3 { margin:10px 0 8px; }
+  .cards { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:center; }
+  .card {
+    width:68px; height:96px; border-radius:10px; background:#fff; color:#000; display:flex;
+    align-items:center; justify-content:center; font-weight:900; font-size:20px;
+    box-shadow:0 4px 0 #0003, 0 10px 20px #0003;
+  }
+  .red { color:#c62828; }
+  .bot {
+    background:#0b4f22; border:1px solid #ffffff28; border-radius:12px; padding:10px; box-shadow: inset 0 0 24px #00000018;
+  }
+  .grid { display:grid; gap:14px; }
+  .grid-2 { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .grid-3 { grid-template-columns: repeat(3,minmax(0,1fr)); }
+
+  .hidden { display:none; }
+  .hr { height:1px; background:#ffffff2a; margin:12px 0; }
+
+  /* Chip tray */
+  .chiptray { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin:10px 0 6px; }
+  .chip {
+    width:64px; height:64px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-weight:900;
+    border:4px solid #111; cursor:pointer; transition: transform .12s ease, box-shadow .12s ease;
+    box-shadow: 0 3px 0 #0006, 0 8px 20px #0005; color:#111; user-select:none;
+  }
+  .chip:hover { transform: translateY(-2px); }
+  .chip:active { transform: translateY(0); box-shadow: 0 3px 0 #0006; }
+
+  .chip.$1   { background: radial-gradient(circle at 30% 25%, #ffffff, #f2f2f2 60%); }
+  .chip.$5   { background: radial-gradient(circle at 30% 25%, #ff4d4d, #c41e1e 60%); color:#fff;}
+  .chip.$25  { background: radial-gradient(circle at 30% 25%, #4dff81, #168c3b 60%); }
+  .chip.$100 { background: radial-gradient(circle at 30% 25%, #4da6ff, #1453a3 60%); color:#fff;}
+  .chip.$500 { background: radial-gradient(circle at 30% 25%, #ffd24d, #b58300 60%); }
+
+  .betline { text-align:center; margin:4px 0 10px; font-weight:700; }
+  .tag { background:#032d11; padding:6px 10px; border-radius:999px; border:1px solid #ffffff1f; }
+
+  .foot { opacity:.95; font-size:14px; margin-top:10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎰 Mini Vegas — Hold’em • Blackjack • Baccarat</h1>
+  <div class="row">
+    <label class="pill">🎮 Game</label>
+    <select id="gameSel">
+      <option value="holdem">Texas Hold’em</option>
+      <option value="blackjack">Blackjack</option>
+      <option value="baccarat">Baccarat</option>
+    </select>
+    <div class="pill">💰 Bankroll: $<span id="chips" class="chips">0</span></div>
+    <button id="resetBankroll" title="Reset to $1000 if you cooked your stack">Reset Bankroll</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- ===================== HOLDEM ===================== -->
+  <section id="holdem" class="table">
+    <h2>♠️ Texas Hold’em</h2>
+    <div class="row">
+      <label>🤖 Bots:</label>
+      <select id="he_botCount">
+        <option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option>
+      </select>
+      <button id="he_start">Start Round</button>
+      <div class="pill">🪙 Pot: $<span id="he_pot">0</span></div>
+    </div>
+
+    <div class="hr"></div>
+
+    <h3>Your Hand</h3>
+    <div id="he_player" class="cards"></div>
+
+    <h3>Community</h3>
+    <div id="he_board" class="cards"></div>
+
+    <div class="hr"></div>
+
+    <h3>Raise by Clicking Chips</h3>
+    <div id="he_chiptray" class="chiptray"></div>
+    <div class="betline">
+      <span class="tag">💵 Current Bet: $<span id="he_betAmt">0</span></span>
+      <button id="he_clear">Clear</button>
+      <button id="he_confirm">Confirm Bet (Raise)</button>
+      <button id="he_call">Call</button>
+      <button id="he_fold">Fold</button>
+      <button id="he_reveal">Reveal</button>
+    </div>
+
+    <div id="he_bots" class="grid grid-2"></div>
+    <div id="he_result" class="foot"></div>
+  </section>
+
+  <!-- ===================== BLACKJACK ===================== -->
+  <section id="blackjack" class="table hidden">
+    <h2>♣️ Blackjack</h2>
+
+    <div class="row">
+      <div class="pill">📊 Player: <strong id="bj_p">0</strong></div>
+      <div class="pill">🧑‍⚖️ Dealer: <strong id="bj_d">?</strong></div>
+    </div>
+
+    <div class="hr"></div>
+
+    <h3>Place Your Bet by Clicking Chips</h3>
+    <div id="bj_chiptray" class="chiptray"></div>
+    <div class="betline">
+      <span class="tag">💵 Wager: $<span id="bj_wager">0</span></span>
+      <button id="bj_clear">Clear</button>
+      <button id="bj_confirm">Confirm Bet + Deal</button>
+      <button id="bj_hit" disabled>Hit</button>
+      <button id="bj_stand" disabled>Stand</button>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:10px;">
+      <div>
+        <h3>Dealer</h3>
+        <div id="bj_dealer" class="cards"></div>
+      </div>
+      <div>
+        <h3>You</h3>
+        <div id="bj_player" class="cards"></div>
+      </div>
+    </div>
+    <div id="bj_result" class="foot"></div>
+  </section>
+
+  <!-- ===================== BACCARAT ===================== -->
+  <section id="baccarat" class="table hidden">
+    <h2>♦️ Baccarat</h2>
+
+    <div class="row">
+      <label>Bet on:</label>
+      <select id="ba_side">
+        <option value="player">Player</option>
+        <option value="banker">Banker</option>
+        <option value="tie">Tie</option>
+      </select>
+    </div>
+
+    <div class="hr"></div>
+
+    <h3>Place Your Bet by Clicking Chips</h3>
+    <div id="ba_chiptray" class="chiptray"></div>
+    <div class="betline">
+      <span class="tag">💵 Wager: $<span id="ba_wager">0</span></span>
+      <button id="ba_clear">Clear</button>
+      <button id="ba_confirm">Confirm Bet + Deal</button>
+    </div>
+
+    <div class="grid grid-2" style="margin-top:8px;">
+      <div class="bot">
+        <h3>Player</h3>
+        <div id="ba_player" class="cards"></div>
+        <div>Score: <strong id="ba_ps">0</strong></div>
+      </div>
+      <div class="bot">
+        <h3>Banker</h3>
+        <div id="ba_banker" class="cards"></div>
+        <div>Score: <strong id="ba_bs">0</strong></div>
+      </div>
+    </div>
+    <div id="ba_result" class="foot"></div>
+    <div class="foot">House rules: Banker win pays 0.95:1 (5% commission). Tie pays 8:1. Player pays 1:1.</div>
+  </section>
+</div>
+
+<script>
+  /*************** UTILITIES + SAVED BANKROLL ***************/
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => document.querySelectorAll(sel);
+  const SUITS = ['♠','♥','♦','♣'];
+  const RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+  let deck = [];
+
+  const BANKROLL_KEY = 'miniVegasBankroll';
+  let bankroll = 1000;
+
+  function updateBankrollDisplay(){ $('#chips').textContent = Math.max(0, Math.round(bankroll)); }
+  function saveBankroll(){ localStorage.setItem(BANKROLL_KEY, String(Math.max(0, Math.round(bankroll)))); }
+  function setBankroll(newVal=null){
+    if (newVal!==null) bankroll = newVal;
+    if (bankroll < 0) bankroll = 0;
+    saveBankroll();
+    updateBankrollDisplay();
+  }
+  function loadBankroll(){
+    const saved = parseInt(localStorage.getItem(BANKROLL_KEY), 10);
+    bankroll = Number.isFinite(saved) ? saved : 1000;
+    updateBankrollDisplay();
+  }
+
+  function newDeck(){
+    deck = [];
+    for (const s of SUITS) for (const r of RANKS) deck.push({suit:s, rank:r});
+    shuffle(deck);
+  }
+  function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]]; } }
+  function draw(){ if (!deck.length) newDeck(); return deck.pop(); }
+  function cardHTML(c){
+    const red = (c.suit==='♥'||c.suit==='♦') ? ' red' : '';
+    return `<div class="card${red}">${c.rank}${c.suit}</div>`;
+  }
+  function toVal(rank){ return ({'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14})[rank]; }
+
+  // Build a chip tray into a container. Returns state handlers.
+  function buildChipTray(containerSel, displaySel, denom=[1,5,25,100,500]){
+    const cont = $(containerSel); cont.innerHTML = '';
+    denom.forEach(v=>{
+      const b = document.createElement('button');
+      b.className = `chip $${v}`;
+      b.dataset.value = String(v);
+      b.textContent = `$${v}`;
+      cont.appendChild(b);
+    });
+    let amount = 0;
+    cont.addEventListener('click', (e)=>{
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (t.classList.contains('chip')){
+        const v = parseInt(t.dataset.value,10);
+        amount += v;
+        $(displaySel).textContent = amount;
+      }
+    });
+    return {
+      get: ()=>amount,
+      clear: ()=>{ amount = 0; $(displaySel).textContent = 0; }
+    };
+  }
+
+  /*************** GAME SWITCHER ***************/
+  $('#gameSel').addEventListener('change', ()=>{
+    $$('.table').forEach(s=>s.classList.add('hidden'));
+    const v = $('#gameSel').value;
+    $('#'+v).classList.remove('hidden');
+  });
+
+  $('#resetBankroll').addEventListener('click', ()=>{
+    if (confirm('Reset bankroll to $1000? stop being broke.')) setBankroll(1000);
+  });
+
+  /*************** HOLDEM ***************/
+  let he_player=[], he_board=[], he_bots=[], he_pot=0, he_curBet=0;
+  const heTray = buildChipTray('#he_chiptray','#he_betAmt');
+
+  function he_render(){
+    $('#he_player').innerHTML = he_player.map(cardHTML).join('');
+    $('#he_board').innerHTML = he_board.map(cardHTML).join('');
+    $('#he_pot').textContent = Math.round(he_pot);
+    const botsDiv = $('#he_bots'); botsDiv.innerHTML = '';
+    he_bots.forEach((b,i)=>{
+      const hand = b.revealed ? b.cards.map(cardHTML).join('') : (b.folded ? '<div class="foot">Folded</div>' : '<div class="foot">Hidden</div>');
+      const el = document.createElement('div');
+      el.className = 'bot';
+      el.innerHTML = `<div><strong>Bot ${i+1}</strong> — Chips: $${Math.round(b.chips)} ${b.folded?'(FOLD)':''}</div>
+                      <div class="cards">${hand}</div>`;
+      botsDiv.appendChild(el);
+    });
+    updateBankrollDisplay();
+  }
+
+  function he_start(){
+    if (bankroll<=0){ alert('💀 you’re broke. go mow a lawn.'); return; }
+    newDeck();
+    he_player=[draw(), draw()];
+    he_board=[draw(), draw(), draw(), draw(), draw()]; // show immediately
+    he_pot=0; he_curBet=0;
+    const n = parseInt($('#he_botCount').value,10) || 1;
+    he_bots = Array.from({length:n},()=>({chips:1000, cards:[draw(),draw()], folded:false, revealed:false}));
+    $('#he_result').textContent = '';
+    heTray.clear();
+    he_render();
+  }
+
+  function he_confirmBet(){ // Raise using chip tray amount
+    const amt = heTray.get();
+    if (!amt || amt<1) return alert('bet something, coward.');
+    if (amt>bankroll) return alert('you’re not that rich.');
+    bankroll -= amt; setBankroll(); he_pot += amt; he_curBet = amt;
+    // bots: 30% fold; else call if they can
+    he_bots.forEach(b=>{
+      if (b.folded) return;
+      if (Math.random()<0.30 || b.chips<he_curBet){ b.folded=true; }
+      else { b.chips -= he_curBet; he_pot += he_curBet; }
+    });
+    heTray.clear();
+    he_render();
+  }
+
+  function he_call(){
+    if (he_curBet<1) return alert('there’s nothing to call, chief.');
+    if (bankroll<he_curBet) return alert('skill issue: insufficient funds.');
+    bankroll -= he_curBet; setBankroll(); he_pot += he_curBet;
+    he_bots.forEach(b=>{
+      if (!b.folded && b.chips>=he_curBet){ b.chips -= he_curBet; he_pot += he_curBet; }
+    });
+    he_render();
+  }
+
+  function he_fold(){
+    const active=he_bots.filter(b=>!b.folded);
+    if (active.length===0){
+      bankroll += he_pot; setBankroll();
+      $('#he_result').textContent='everyone folded lol. pot returns to you.';
+    } else {
+      const share = he_pot/active.length;
+      active.forEach(b=> b.chips += share);
+      $('#he_result').textContent='you folded. bots split your hopes.';
+    }
+    he_pot=0; he_render();
+  }
+
+  function he_eval(cards){
+    const suits={}, ranks={};
+    for (const c of cards){ suits[c.suit]=(suits[c.suit]||0)+1; ranks[c.rank]=(ranks[c.rank]||0)+1; }
+    const rankVals = Object.keys(ranks).map(toVal).sort((a,b)=>b-a);
+    const isFlush = Object.values(suits).some(v=>v>=5);
+    const isStraight = he_straight(rankVals);
+    const flushCards = isFlush ? cards.filter(c=>suits[c.suit]>=5) : [];
+    if (isFlush && flushCards.length>=5){
+      const fvals = flushCards.map(c=>toVal(c.rank)).sort((a,b)=>b-a);
+      if (he_straight(fvals)) return {rank:9, name:'Straight Flush'};
+    }
+    const counts = Object.values(ranks);
+    if (counts.includes(4)) return {rank:8, name:'Four of a Kind'};
+    if (counts.includes(3) && counts.includes(2)) return {rank:7, name:'Full House'};
+    if (isFlush) return {rank:6, name:'Flush'};
+    if (isStraight) return {rank:5, name:'Straight'};
+    if (counts.includes(3)) return {rank:4, name:'Three of a Kind'};
+    const pairs = counts.filter(v=>v===2).length;
+    if (pairs>=2) return {rank:3, name:'Two Pair'};
+    if (pairs===1) return {rank:2, name:'One Pair'};
+    return {rank:1, name:'High Card'};
+  }
+  function he_straight(vals){
+    const s=new Set(vals); const a=[...s].sort((x,y)=>y-x);
+    for(let i=0;i<=a.length-5;i++){
+      if(a[i]-1===a[i+1] && a[i]-2===a[i+2] && a[i]-3===a[i+3] && a[i]-4===a[i+4]) return true;
+    }
+    return s.has(14)&&s.has(2)&&s.has(3)&&s.has(4)&&s.has(5);
+  }
+
+  function he_reveal(){
+    he_bots.forEach(b=> b.revealed=true);
+    const results=[];
+    const p = he_eval([...he_player, ...he_board]);
+    results.push({name:'You', r:p.rank, hand:p.name, you:true});
+    he_bots.forEach((b,i)=>{
+      if (b.folded) return results.push({name:`Bot ${i+1}`, r:0, hand:'Folded'});
+      const ev = he_eval([...b.cards, ...he_board]);
+      results.push({name:`Bot ${i+1}`, r:ev.rank, hand:ev.name, bot:b});
+    });
+    const top = Math.max(...results.map(x=>x.r));
+    const winners = results.filter(x=>x.r===top && top>0);
+    if (!winners.length){
+      bankroll += he_pot; setBankroll();
+      $('#he_result').textContent='nobody? pot back to you.';
+    } else {
+      const share = he_pot / winners.length;
+      winners.forEach(w=>{
+        if (w.you) { bankroll += share; setBankroll(); }
+        if (w.bot) w.bot.chips += share;
+      });
+      $('#he_result').textContent = (winners.length===1)
+        ? `${winners[0].name} wins $${Math.round(he_pot)} with ${winners[0].hand}!`
+        : `Tie. Split pot among: ${winners.map(w=>w.name).join(', ')}`;
+    }
+    he_pot=0; he_render();
+  }
+
+  $('#he_start').addEventListener('click', he_start);
+  $('#he_confirm').addEventListener('click', he_confirmBet);
+  $('#he_clear').addEventListener('click', heTray.clear);
+  $('#he_call').addEventListener('click', he_call);
+  $('#he_fold').addEventListener('click', he_fold);
+  $('#he_reveal').addEventListener('click', he_reveal);
+
+  /*************** BLACKJACK ***************/
+  const bjTray = buildChipTray('#bj_chiptray', '#bj_wager');
+  let bj_player=[], bj_dealer=[], bj_bet=0, bj_active=false, bj_hideDealer=true;
+
+  function valBJ(rank){ if (rank==='A') return 11; if (['K','Q','J'].includes(rank)) return 10; return parseInt(rank,10); }
+  function scoreBJ(hand){
+    let total=0, aces=0;
+    for(const c of hand){ total+=valBJ(c.rank); if (c.rank==='A') aces++; }
+    while(total>21 && aces>0){ total-=10; aces--; }
+    return total;
+  }
+  function bj_render(){
+    $('#bj_player').innerHTML = bj_player.map(cardHTML).join('');
+    $('#bj_dealer').innerHTML = bj_dealer.map((c,i)=> (bj_hideDealer && i===1) ? `<div class="card">🂠</div>` : cardHTML(c)).join('');
+    $('#bj_p').textContent = scoreBJ(bj_player);
+    $('#bj_d').textContent = bj_hideDealer ? '?' : scoreBJ(bj_dealer);
+    updateBankrollDisplay();
+  }
+  function bj_buttons(active){
+    $('#bj_hit').disabled = !active;
+    $('#bj_stand').disabled = !active;
+  }
+  function bj_confirm(){
+    if (bj_active) return;
+    const wager = bjTray.get();
+    if (!wager) return alert('click some chips, baller.');
+    if (wager>bankroll) return alert('your wallet is squeaking. bet less.');
+    bankroll -= wager; setBankroll(); bj_bet = wager; bjTray.clear();
+
+    newDeck();
+    bj_player=[draw(), draw()];
+    bj_dealer=[draw(), draw()];
+    bj_hideDealer=true; bj_active=true;
+    $('#bj_result').textContent='';
+    bj_buttons(true);
+    bj_render();
+
+    const p=scoreBJ(bj_player), d=scoreBJ(bj_dealer);
+    if (p===21 || d===21){ bj_hideDealer=false; bj_end(); }
+  }
+  function bj_hit(){
+    if (!bj_active) return;
+    bj_player.push(draw());
+    bj_render();
+    if (scoreBJ(bj_player)>21){ bj_hideDealer=false; bj_end(); }
+  }
+  function bj_stand(){
+    if (!bj_active) return;
+    bj_hideDealer=false;
+    while(scoreBJ(bj_dealer)<17) bj_dealer.push(draw());
+    bj_end();
+  }
+  function bj_end(){
+    bj_active=false; bj_buttons(false);
+    const p=scoreBJ(bj_player), d=scoreBJ(bj_dealer);
+    let msg='';
+    if (p>21){ msg='you busted 💀 dealer scoops.'; }
+    else if (d>21){ msg='dealer busts. you win 🤑'; bankroll += bj_bet*2; setBankroll(); }
+    else if (p>d){
+      const blackjack = (p===21 && bj_player.length===2);
+      const payout = blackjack ? Math.floor(bj_bet*2.5) : bj_bet*2;
+      msg = blackjack ? 'BLACKJACK! 3:2 payout 🔥' : 'you win 🤑';
+      bankroll += payout; setBankroll();
+    } else if (p<d){ msg='dealer wins. cope.'; }
+    else { msg='push. take it back 🫱'; bankroll += bj_bet; setBankroll(); }
+    bj_bet=0;
+    $('#bj_result').textContent = msg;
+    bj_render();
+  }
+
+  $('#bj_confirm').addEventListener('click', bj_confirm);
+  $('#bj_clear').addEventListener('click', bjTray.clear);
+  $('#bj_hit').addEventListener('click', bj_hit);
+  $('#bj_stand').addEventListener('click', bj_stand);
+
+  /*************** BACCARAT ***************/
+  const baTray = buildChipTray('#ba_chiptray', '#ba_wager');
+  let ba_player=[], ba_banker=[], ba_bet=0, ba_side='player';
+
+  function valBA(rank){ if (rank==='A') return 1; if (['10','J','Q','K'].includes(rank)) return 0; return parseInt(rank,10); }
+  function totalBA(hand){ return hand.reduce((t,c)=>t+valBA(c.rank),0)%10; }
+
+  function ba_render(){
+    $('#ba_player').innerHTML = ba_player.map(cardHTML).join('');
+    $('#ba_banker').innerHTML = ba_banker.map(cardHTML).join('');
+    $('#ba_ps').textContent = totalBA(ba_player);
+    $('#ba_bs').textContent = totalBA(ba_banker);
+    updateBankrollDisplay();
+  }
+
+  function ba_confirm(){
+    const wager = baTray.get();
+    if (!wager) return alert('bet with chips, not vibes.');
+    if (wager>bankroll) return alert('you don’t have that.');
+    ba_side = $('#ba_side').value;
+    bankroll -= wager; setBankroll(); ba_bet = wager; baTray.clear();
+
+    newDeck();
+    ba_player=[draw(), draw()];
+    ba_banker=[draw(), draw()];
+    // Natural check handled by rules: only continue draws if neither is 8/9.
+    let pT=totalBA(ba_player), bT=totalBA(ba_banker);
+    if (pT<8 && bT<8){
+      let p3=null;
+      if (pT<=5){ p3=draw(); ba_player.push(p3); pT=totalBA(ba_player); }
+      const t=bT, pv = p3 ? valBA(p3.rank) : null;
+      const bankerDraw = (t<=2) ||
+                         (t===3 && p3 && pv!==8) ||
+                         (t===4 && p3 && [2,3,4,5,6,7].includes(pv)) ||
+                         (t===5 && p3 && [4,5,6,7].includes(pv)) ||
+                         (t===6 && p3 && [6,7].includes(pv));
+      if (bankerDraw) ba_banker.push(draw());
+    }
+    // result
+    pT=totalBA(ba_player); bT=totalBA(ba_banker);
+    let winner = (pT>bT) ? 'player' : (bT>pT ? 'banker' : 'tie');
+    let msg = `Player ${pT} vs Banker ${bT} → ${winner.toUpperCase()}`;
+
+    if (winner==='tie'){
+      if (ba_side==='tie'){ bankroll += ba_bet*9; setBankroll(); msg+=' — Tie pays 8:1 🤑'; }
+      else { bankroll += ba_bet; setBankroll(); msg+=' — Push on non-tie bets.'; }
+    } else if (winner===ba_side){
+      if (winner==='player'){ bankroll += ba_bet*2; setBankroll(); msg+=' — Paid 1:1'; }
+      else { bankroll += Math.floor(ba_bet*1.95); setBankroll(); msg+=' — Banker pays 0.95:1'; }
+    } else {
+      msg+=' — L + ratio.';
+    }
+    $('#ba_result').textContent = msg;
+    ba_render();
+  }
+
+  $('#ba_confirm').addEventListener('click', ba_confirm);
+  $('#ba_clear').addEventListener('click', baTray.clear);
+
+  /*************** INIT ***************/
+  loadBankroll(); // load saved bankroll first
+  // default visible is Hold’em; start a round so it looks alive
+  he_start();
+</script>
+</body>
+</html>
